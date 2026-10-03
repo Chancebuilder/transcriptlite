@@ -1,19 +1,42 @@
 # TranscriptLite
 
-Lightweight transcript-evaluation application for The Degree Agency.
+TranscriptLite is the lightweight, privacy-first transcript planning MVP for The Degree Agency.
 
-## Deployment
+## Production
 
-- Production site: https://transcriptlite.netlify.app
-- Hosting: Netlify
+- Netlify: https://transcriptlite.netlify.app
 - Repository: Chancebuilder/transcriptlite
+- Default branch: main
 
-## Build status
+## MVP features
 
-This repository is intentionally initialized without application code so Cursor can build and deploy the TranscriptLite MVP into this repository.
+- Manual coursework entry
+- CSV coursework import
+- Client-side validation
+- Duplicate-course detection
+- Deterministic course categorization
+- Credit totals and category summaries
+- Preliminary transfer-planning snapshot
+- CSV export and print results
+- Browser-local storage only
 
-## Deployment target
+## Privacy and scope
 
-Cursor should treat this repository as the source of truth and deploy the production build to the existing Netlify site:
+This MVP does not use accounts, a backend database, PDF/OCR processing, or AI. Coursework is stored locally in the user's browser.
 
-`transcriptlite.netlify.app`
+TranscriptLite provides preliminary planning support only. It is not an official transfer-credit evaluation and does not guarantee that a receiving institution will accept or apply any course.
+
+## Local development
+
+```bash
+npm install
+npm run dev
+```
+
+## Production build
+
+```bash
+npm run build
+```
+
+Netlify is configured by `netlify.toml` to publish the Vite `dist` directory.
