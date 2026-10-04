@@ -12,6 +12,7 @@ TranscriptLite is the lightweight, privacy-first transcript planning MVP for The
 
 - Manual coursework entry
 - CSV coursework import
+- Local-only PDF transcript text extraction and review (text-based PDFs; no server upload)
 - Client-side validation
 - Duplicate-course detection
 - Deterministic course categorization
@@ -22,7 +23,7 @@ TranscriptLite is the lightweight, privacy-first transcript planning MVP for The
 
 ## Privacy and scope
 
-This MVP does not use accounts, a backend database, PDF/OCR processing, or AI. Coursework is stored locally in the user's browser.
+This MVP does not use accounts, a transcript backend database, server-side PDF processing, OCR, or AI. Text-based transcript PDFs are read locally with PDF.js and coursework is stored locally in the user's browser. PDF contents and coursework are not sent to Education Data Core.
 
 TranscriptLite provides preliminary planning support only. It is not an official transfer-credit evaluation and does not guarantee that a receiving institution will accept or apply any course.
 
