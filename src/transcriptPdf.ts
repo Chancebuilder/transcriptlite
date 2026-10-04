@@ -16,7 +16,7 @@ const courseLine = /^([A-Z]{2,8})\s*[- ]?\s*(\d{2,4}[A-Z]?)\s+(.+?)\s+(\d+(?:\.\
 
 type PdfTextItem = { str: string; transform: number[]; hasEOL?: boolean }
 
-function pageLines(items: PdfTextItem[]) {
+function pageLines(items: Array<PdfTextItem>) {
   const lines: string[] = []
   let current: string[] = []
   let lastY: number | null = null
@@ -46,7 +46,10 @@ export async function extractTranscriptPdf(file: File): Promise<{ text: string; 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber)
     const content = await page.getTextContent()
-    lines.push(...pageLines(content.items.filter((item): item is PdfTextItem => 'str' in item)))
+    const textItems: PdfTextItem[] = content.items.flatMap(item =>
+      'str' in item ? [{ str: item.str, transform: item.transform, hasEOL: item.hasEOL }] : []
+    )
+    lines.push(...pageLines(textItems))
   }
 
   const text = lines.join('\n')
