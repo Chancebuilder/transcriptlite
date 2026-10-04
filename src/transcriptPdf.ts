@@ -12,30 +12,68 @@ export type ParsedPdfCourse = {
   term: string
 }
 
-const courseLine = /^([A-Z]{2,8})\s*[- ]?\s*(\d{2,4}[A-Z]?)\s+(.+?)\s+(\d+(?:\.\d+)?)\s+([A-F][+-]?|P|PASS|CR|S|U|W|WF)$/i
-
 type PdfTextItem = { str: string; transform: number[]; hasEOL?: boolean }
 
-function pageLines(items: Array<PdfTextItem>) {
-  const lines: string[] = []
-  let current: string[] = []
-  let lastY: number | null = null
+const codePattern = /^(?:TRN\s*)?([A-Z]{2,8})\s*[- ]?\s*(\d{2,4}[A-Z]?)\b\s*(.*)$/i
+const gradePattern = /^(A[+-]?|B[+-]?|C[+-]?|D[+-]?|F|P|PASS|CR|TR|NC|I|W|WF|AU|S|U)$/i
+const levelPattern = /^(UG|UL|LL|GR|G)$/i
+const numberPattern = /^\d+(?:\.\d+)?$/
+const noisePattern = /^(course|title|level|attempted|earned|grade|quality|points|status:|academic history|cumulative summary|record notes)/i
 
-  const flush = () => {
-    const line = current.join(' ').replace(/\s+/g, ' ').trim()
-    if (line) lines.push(line)
-    current = []
-  }
-
+function pageLines(items: PdfTextItem[]) {
+  const rows = new Map<number, Array<{ x: number; text: string }>>()
   for (const item of items) {
-    const y = item.transform[5]
-    if (lastY !== null && Math.abs(y - lastY) > 2) flush()
-    if (item.str.trim()) current.push(item.str.trim())
-    if (item.hasEOL) flush()
-    lastY = y
+    const text = item.str.trim()
+    if (!text) continue
+    const x = item.transform[4]
+    const y = Math.round(item.transform[5] / 2) * 2
+    const row = rows.get(y) || []
+    row.push({ x, text })
+    rows.set(y, row)
   }
-  flush()
-  return lines
+  return [...rows.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .map(([, row]) => row.sort((a, b) => a.x - b.x).map(v => v.text).join(' ').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+}
+
+function parseCourses(lines: string[]): ParsedPdfCourse[] {
+  const courses: ParsedPdfCourse[] = []
+  for (let i = 0; i < lines.length; i += 1) {
+    const start = lines[i].match(codePattern)
+    if (!start || noisePattern.test(lines[i])) continue
+
+    const code = `${start[1].toUpperCase()} ${start[2].toUpperCase()}`
+    let title = start[3].trim()
+    const window = lines.slice(i, Math.min(lines.length, i + 6))
+    const tokens = window.join(' ').split(/\s+/)
+    const gradeIndex = tokens.findIndex(t => gradePattern.test(t))
+    if (gradeIndex < 0) continue
+
+    const grade = tokens[gradeIndex].toUpperCase()
+    const beforeGrade = tokens.slice(0, gradeIndex)
+    const numeric = beforeGrade.filter(t => numberPattern.test(t)).map(Number)
+    const credits = numeric.length ? numeric[numeric.length - 1] : NaN
+    if (!Number.isFinite(credits) || credits <= 0 || credits > 20) continue
+
+    if (!title) {
+      const titleTokens = beforeGrade.slice(2).filter(t => !levelPattern.test(t) && !numberPattern.test(t))
+      title = titleTokens.join(' ')
+    } else {
+      title = title.replace(/\b(UG|UL|LL|GR|G)\b.*$/i, '').trim()
+    }
+    if (!title || title.length < 2) continue
+
+    courses.push({ institution: '', code, title, credits, grade, term: '' })
+  }
+
+  const seen = new Set<string>()
+  return courses.filter(course => {
+    const key = course.code.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export async function extractTranscriptPdf(file: File): Promise<{ text: string; courses: ParsedPdfCourse[] }> {
@@ -53,18 +91,5 @@ export async function extractTranscriptPdf(file: File): Promise<{ text: string; 
   }
 
   const text = lines.join('\n')
-  const courses: ParsedPdfCourse[] = []
-  for (const line of lines) {
-    const match = line.match(courseLine)
-    if (!match) continue
-    courses.push({
-      institution: '',
-      code: `${match[1].toUpperCase()} ${match[2].toUpperCase()}`,
-      title: match[3].trim(),
-      credits: Number(match[4]),
-      grade: match[5].toUpperCase(),
-      term: '',
-    })
-  }
-  return { text, courses }
+  return { text, courses: parseCourses(lines) }
 }
