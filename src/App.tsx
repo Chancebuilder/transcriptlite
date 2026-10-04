@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { getCoreHealth, searchInstitutions, type Institution } from './educationDataCore'
 import { extractTranscriptPdf, type ParsedPdfCourse } from './transcriptPdf'
 import Papa from 'papaparse'
@@ -64,6 +64,8 @@ export default function App() {
   const [pdfCourses, setPdfCourses] = useState<ParsedPdfCourse[]>([])
   const [pdfInstitution, setPdfInstitution] = useState('')
   const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfFileName, setPdfFileName] = useState('')
+  const pdfInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     getCoreHealth().then(result => setCoreOnline(result.ok)).catch(() => setCoreOnline(false))
@@ -111,11 +113,18 @@ export default function App() {
   }
 
   const onPdf = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+    const input = event.currentTarget
+    const file = input.files?.item(0)
+    if (!file) {
+      setPdfFileName('')
+      setMessage('No PDF was selected. Please choose the transcript file again.')
+      return
+    }
+    setPdfFileName(file.name)
     if (file.type !== 'application/pdf' || file.size > 15_000_000) {
       setMessage('Please choose a PDF transcript under 15 MB.')
-      event.target.value = ''
+      input.value = ''
+      setPdfFileName('')
       return
     }
     setPdfBusy(true)
@@ -134,7 +143,6 @@ export default function App() {
       setMessage(`Could not read ${file.name} locally. The file was not uploaded. Try another text-based PDF.`)
     } finally {
       setPdfBusy(false)
-      event.target.value = ''
     }
   }
 
@@ -278,8 +286,18 @@ export default function App() {
             <div className="import">
               <h3>Or read a transcript PDF on this device</h3>
               <p>The PDF is processed in your browser and is never uploaded. Text-based PDFs work best; image-only scans are not yet supported.</p>
-              <input type="file" accept="application/pdf,.pdf" onChange={onPdf} disabled={pdfBusy} />
-              {pdfBusy && <p className="muted">Reading PDF locally…</p>}
+              <input
+                ref={pdfInputRef}
+                id="transcript-pdf"
+                type="file"
+                accept=".pdf,application/pdf"
+                onClick={event => { event.currentTarget.value = '' }}
+                onChange={onPdf}
+                disabled={pdfBusy}
+              />
+              <p className="muted" aria-live="polite">
+                {pdfBusy ? `Reading ${pdfFileName || 'PDF'} locally…` : pdfFileName ? `Selected: ${pdfFileName}` : 'No PDF selected yet.'}
+              </p>
               {pdfCourses.length > 0 && <div className="pdf-review">
                 <label>Transcript institution<input value={pdfInstitution} onChange={e => setPdfInstitution(e.target.value)} placeholder="Institution shown on transcript" /></label>
                 <strong>{pdfCourses.length} possible courses found</strong>
