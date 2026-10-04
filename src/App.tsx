@@ -120,14 +120,18 @@ export default function App() {
     }
     setPdfBusy(true)
     setPdfCourses([])
+    setMessage(`Reading ${file.name} locally…`)
     try {
       const result = await extractTranscriptPdf(file)
       setPdfCourses(result.courses)
       setMessage(result.courses.length
-        ? `Found ${result.courses.length} possible course${result.courses.length === 1 ? '' : 's'}. Review before adding.`
-        : 'PDF text was read locally, but no courses were confidently identified. Scanned/image-only PDFs are not yet supported.')
-    } catch {
-      setMessage('Could not read that PDF locally. The file was not uploaded.')
+        ? `Read ${file.name}. Found ${result.courses.length} possible course${result.courses.length === 1 ? '' : 's'}. Review before adding.`
+        : result.text.trim()
+          ? `Read ${file.name}, but no course rows matched automatically. The PDF was processed locally and was not uploaded.`
+          : `${file.name} contains no extractable text. It may be an image-only/scanned PDF.`)
+    } catch (error) {
+      console.error('Local PDF import failed', error)
+      setMessage(`Could not read ${file.name} locally. The file was not uploaded. Try another text-based PDF.`)
     } finally {
       setPdfBusy(false)
       event.target.value = ''
