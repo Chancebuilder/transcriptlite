@@ -66,6 +66,10 @@ export default function App() {
   const [institutionMatches, setInstitutionMatches] = useState<Institution[]>([])
   const [pdfCourses, setPdfCourses] = useState<ParsedPdfCourse[]>([])
   const [pdfInstitution, setPdfInstitution] = useState('')
+  const [detectedInstitutions, setDetectedInstitutions] = useState<string[]>([])
+  const [destinationQuery, setDestinationQuery] = useState('')
+  const [destinationMatches, setDestinationMatches] = useState<Institution[]>([])
+  const [destinationSchool, setDestinationSchool] = useState<Institution | null>(null)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfFileName, setPdfFileName] = useState('')
   const [showNextSteps, setShowNextSteps] = useState(false)
@@ -74,6 +78,13 @@ export default function App() {
   useEffect(() => {
     getCoreHealth().then(result => setCoreOnline(result.ok)).catch(() => setCoreOnline(false))
   }, [])
+
+  useEffect(() => {
+    const query = destinationQuery.trim()
+    if (query.length < 2) { setDestinationMatches([]); return }
+    const timer = window.setTimeout(() => searchInstitutions(query).then(setDestinationMatches).catch(() => setDestinationMatches([])), 250)
+    return () => window.clearTimeout(timer)
+  }, [destinationQuery])
 
   useEffect(() => {
     const query = form.institution.trim()
@@ -132,11 +143,11 @@ export default function App() {
       return
     }
     setPdfBusy(true)
-    setPdfCourses([])
     setMessage(`Reading ${file.name} locally…`)
     try {
       const result = await extractTranscriptPdf(file)
-      setPdfCourses(result.courses)
+      setPdfCourses(previous => [...previous, ...result.courses])
+      setDetectedInstitutions(previous => [...new Set([...previous, ...result.institutions])])
       setMessage(result.courses.length
         ? `Read ${file.name}. Found ${result.courses.length} possible course${result.courses.length === 1 ? '' : 's'}. Review before adding.`
         : result.text.trim()
@@ -151,20 +162,17 @@ export default function App() {
   }
 
   const addPdfCourses = () => {
-    if (!pdfInstitution.trim()) {
-      setMessage('Enter the institution shown on the transcript before adding extracted courses.')
-      return
-    }
     const merged = [...courses]
     let added = 0
     for (const item of pdfCourses) {
-      const course: Course = { id: uid(), ...item, creditSystem: 'semester', institution: pdfInstitution.trim(), category: categorize(item.title, item.code) }
+      const course: Course = { id: uid(), ...item, creditSystem: 'semester', institution: item.institution || pdfInstitution.trim() || 'Institution needs review', category: categorize(item.title, item.code) }
       const duplicate = merged.some(c => c.institution.toLowerCase() === course.institution.toLowerCase() && c.code.toLowerCase() === course.code.toLowerCase())
       if (!duplicate) { merged.push(course); added += 1 }
     }
     save(merged)
     setPdfCourses([])
     setPdfInstitution('')
+    setDetectedInstitutions([])
     setMessage(`Added ${added} reviewed course${added === 1 ? '' : 's'} from the locally processed PDF.`)
     setShowNextSteps(true)
   }
@@ -318,10 +326,14 @@ export default function App() {
                 {pdfBusy ? `Reading ${pdfFileName || 'PDF'} locally…` : pdfFileName ? `Selected: ${pdfFileName}` : 'No PDF selected yet.'}
               </p>
               {pdfCourses.length > 0 && <div className="pdf-review">
-                <label>Transcript institution<input value={pdfInstitution} onChange={e => setPdfInstitution(e.target.value)} placeholder="Institution shown on transcript" /></label>
+                <strong>Institutions detected: {detectedInstitutions.length ? detectedInstitutions.join(', ') : 'None — edit below'}</strong>
+                <p className="muted">Review and edit the institution for each extracted course. You can add another transcript before continuing.</p>
                 <strong>{pdfCourses.length} possible courses found</strong>
-                <div className="pdf-course-list">{pdfCourses.map((course, index) => <div key={index}><span>{course.code} · {course.title}</span><span>{course.credits} cr · {course.grade}</span></div>)}</div>
-                <button type="button" className="primary" onClick={addPdfCourses}>Add reviewed courses</button>
+                <div className="pdf-course-list">{pdfCourses.map((course, index) => <div key={index}>
+                  <input aria-label={`Institution for ${course.code}`} value={course.institution} placeholder="Source institution" onChange={e => setPdfCourses(list => list.map((item, i) => i === index ? {...item, institution:e.target.value} : item))} />
+                  <span>{course.code} · {course.title}</span><span>{course.credits} cr · {course.grade}</span>
+                </div>)}</div>
+                <div className="actions"><button type="button" onClick={() => pdfInputRef.current?.click()}>Add another transcript</button><button type="button" className="primary" onClick={addPdfCourses}>Add reviewed courses</button></div>
               </div>}
             </div>
 
@@ -393,6 +405,14 @@ export default function App() {
           </div>
         </section>
 
+        <section className="panel" id="destination-school">
+          <h2>Where do you want to transfer?</h2>
+          <p>Choose the receiving school from the Education Data Core. This is separate from the institutions shown on your transcripts.</p>
+          <label>Search receiving school<input value={destinationQuery} onChange={e => { setDestinationQuery(e.target.value); setDestinationSchool(null) }} placeholder="Start typing a college or university" /></label>
+          {destinationMatches.length > 0 && <div className="reference-matches">{destinationMatches.map(item => <button type="button" key={item.id} onClick={() => { setDestinationSchool(item); setDestinationQuery(item.official_name); setDestinationMatches([]) }}>{item.official_name}</button>)}</div>}
+          {destinationSchool && <div className="message">Selected receiving school: <strong>{destinationSchool.official_name}</strong></div>}
+        </section>
+
         <section className="panel opportunities" id="report">
           <h2>Preliminary TranscriptLite report</h2>
           <p>
@@ -403,7 +423,7 @@ export default function App() {
           <div className="opportunity-grid">
             <div><strong>{Math.min(totalCredits, 90).toFixed(2)}</strong><span>Credits to review for possible transfer</span></div>
             <div><strong>{Object.keys(categoryTotals).length}</strong><span>Academic categories represented</span></div>
-            <div><strong>{courses.length ? 'Ready' : 'Not ready'}</strong><span>For a preliminary degree-path comparison</span></div>
+            <div><strong>{courses.length && destinationSchool ? 'Ready' : 'Needs destination'}</strong><span>{destinationSchool ? `Receiving school: ${destinationSchool.official_name}` : 'Choose where you want to transfer'}</span></div>
           </div>
         </section>
       </main>
