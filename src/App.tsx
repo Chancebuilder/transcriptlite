@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
-import { getCoreHealth, searchInstitutions, type Institution } from './educationDataCore'
+import { getCoreHealth, searchInstitutions, getEvaluatedPrograms, type Institution, type EvaluatedProgram } from './educationDataCore'
 import { extractTranscriptPdf, type ParsedPdfCourse } from './transcriptPdf'
 import Papa from 'papaparse'
 import { z } from 'zod'
@@ -96,6 +96,9 @@ export default function App() {
   const [destinationMatches, setDestinationMatches] = useState<Institution[]>([])
   const [destinationSchool, setDestinationSchool] = useState<Institution | null>(null)
   const [degreeGoal, setDegreeGoal] = useState('Still deciding')
+  const [evaluatedPrograms, setEvaluatedPrograms] = useState<EvaluatedProgram[]>([])
+  const [selectedProgramId, setSelectedProgramId] = useState('')
+  const [programsBusy, setProgramsBusy] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfFileName, setPdfFileName] = useState('')
   const [showNextSteps, setShowNextSteps] = useState(false)
@@ -104,6 +107,20 @@ export default function App() {
   useEffect(() => {
     getCoreHealth().then(result => setCoreOnline(result.ok)).catch(() => setCoreOnline(false))
   }, [])
+
+  useEffect(() => {
+    if (!destinationSchool) {
+      setEvaluatedPrograms([])
+      setSelectedProgramId('')
+      return
+    }
+    setProgramsBusy(true)
+    getEvaluatedPrograms(destinationSchool.id)
+      .then(items => setEvaluatedPrograms(items || []))
+      .catch(() => setEvaluatedPrograms([]))
+      .finally(() => setProgramsBusy(false))
+    setSelectedProgramId('')
+  }, [destinationSchool])
 
   useEffect(() => {
     const query = destinationQuery.trim()
@@ -269,6 +286,7 @@ export default function App() {
   const semesterEquivalent = (course: Course) => course.creditSystem === 'quarter' ? course.credits * 2 / 3 : course.credits
   const totalCredits = useMemo(() => courses.reduce((sum, c) => sum + semesterEquivalent(c), 0), [courses])
   const quarterCredits = useMemo(() => courses.filter(c => c.creditSystem === 'quarter').reduce((sum, c) => sum + c.credits, 0), [courses])
+  const selectedProgram = evaluatedPrograms.find(p => (p.program_version_id || p.id) === selectedProgramId)
   const categoryTotals = useMemo(() => {
     return courses.reduce<Record<string, number>>((acc, c) => {
       acc[c.category] = (acc[c.category] || 0) + semesterEquivalent(c)
@@ -445,6 +463,16 @@ export default function App() {
           <label>Search receiving school<input value={destinationQuery} onChange={e => { setDestinationQuery(e.target.value); setDestinationSchool(null) }} placeholder="Start typing a college or university" /></label>
           {destinationMatches.length > 0 && <div className="reference-matches">{destinationMatches.map(item => <button type="button" key={item.id} onClick={() => { setDestinationSchool(item); setDestinationQuery(item.official_name); setDestinationMatches([]) }}>{item.official_name}</button>)}</div>}
           {destinationSchool && <div className="message">Selected receiving school: <strong>{destinationSchool.official_name}</strong></div>}
+          {destinationSchool && <div className="course-form">
+            <h3>Choose an evaluated degree</h3>
+            <p className="muted">Only programs documented in the Education Data Core for this institution appear here.</p>
+            {programsBusy ? <p>Loading evaluated programs…</p> : evaluatedPrograms.length ? (
+              <label>Degree program<select value={selectedProgramId} onChange={e => setSelectedProgramId(e.target.value)}>
+                <option value="">Choose a degree</option>
+                {evaluatedPrograms.map(program => <option key={program.program_version_id || program.id} value={program.program_version_id || program.id}>{program.official_program_name || program.official_program_family_name || 'Evaluated program'}{program.academic_catalog_year ? ' · ' + program.academic_catalog_year : ''}</option>)}
+              </select></label>
+            ) : <p className="message">No evaluated degree programs are currently available for this institution.</p>}
+          </div>}
         </section>
 
         <section className="panel opportunities" id="report">
@@ -457,7 +485,7 @@ export default function App() {
           <div className="opportunity-grid">
             <div><strong>{Math.min(totalCredits, 90).toFixed(2)}</strong><span>Credits to review for possible transfer</span></div>
             <div><strong>{Object.keys(categoryTotals).length}</strong><span>Academic categories represented · Goal: {degreeGoal}</span></div>
-            <div><strong>{courses.length && destinationSchool ? 'Ready' : 'Needs destination'}</strong><span>{destinationSchool ? `Receiving school: ${destinationSchool.official_name}` : 'Choose where you want to transfer'}</span></div>
+            <div><strong>{courses.length && destinationSchool && selectedProgram ? 'Ready' : 'Needs selection'}</strong><span>{selectedProgram ? `Apply to: ${selectedProgram.official_program_name || selectedProgram.official_program_family_name}` : destinationSchool ? 'Choose an evaluated degree program' : 'Choose where you want to transfer'}</span></div>
           </div>
         </section>
       </main>
