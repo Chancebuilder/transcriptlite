@@ -10,6 +10,7 @@ type Course = {
   code: string
   title: string
   credits: number
+  creditSystem: 'semester' | 'quarter'
   grade: string
   term: string
   category: string
@@ -19,7 +20,8 @@ const courseSchema = z.object({
   institution: z.string().trim().min(1, 'Institution is required'),
   code: z.string().trim().min(1, 'Course code is required'),
   title: z.string().trim().min(1, 'Course title is required'),
-  credits: z.coerce.number().positive().max(20),
+  credits: z.coerce.number().positive().max(30),
+  creditSystem: z.enum(['semester', 'quarter']).default('semester'),
   grade: z.string().trim().max(12).default(''),
   term: z.string().trim().max(40).default(''),
 })
@@ -29,6 +31,7 @@ const starter = {
   code: '',
   title: '',
   credits: '3',
+  creditSystem: 'semester' as const,
   grade: '',
   term: '',
 }
@@ -52,7 +55,7 @@ function uid() {
 export default function App() {
   const [courses, setCourses] = useState<Course[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('transcriptlite:courses') || '[]')
+      return JSON.parse(localStorage.getItem('transcriptlite:courses') || '[]').map((course: Course) => ({ ...course, creditSystem: course.creditSystem || 'semester' }))
     } catch {
       return []
     }
@@ -155,7 +158,7 @@ export default function App() {
     const merged = [...courses]
     let added = 0
     for (const item of pdfCourses) {
-      const course: Course = { id: uid(), ...item, institution: pdfInstitution.trim(), category: categorize(item.title, item.code) }
+      const course: Course = { id: uid(), ...item, creditSystem: 'semester', institution: pdfInstitution.trim(), category: categorize(item.title, item.code) }
       const duplicate = merged.some(c => c.institution.toLowerCase() === course.institution.toLowerCase() && c.code.toLowerCase() === course.code.toLowerCase())
       if (!duplicate) { merged.push(course); added += 1 }
     }
@@ -185,6 +188,7 @@ export default function App() {
             code: row.code || row.course_code || '',
             title: row.title || row.course_title || row.course || '',
             credits: row.credits || '',
+            creditSystem: (row.credit_system || row.creditSystem || 'semester').toLowerCase() === 'quarter' ? 'quarter' : 'semester',
             grade: row.grade || '',
             term: row.term || row.semester || '',
           }
@@ -226,10 +230,12 @@ export default function App() {
     document.getElementById('manual-course-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const totalCredits = useMemo(() => courses.reduce((sum, c) => sum + c.credits, 0), [courses])
+  const semesterEquivalent = (course: Course) => course.creditSystem === 'quarter' ? course.credits * 2 / 3 : course.credits
+  const totalCredits = useMemo(() => courses.reduce((sum, c) => sum + semesterEquivalent(c), 0), [courses])
+  const quarterCredits = useMemo(() => courses.filter(c => c.creditSystem === 'quarter').reduce((sum, c) => sum + c.credits, 0), [courses])
   const categoryTotals = useMemo(() => {
     return courses.reduce<Record<string, number>>((acc, c) => {
-      acc[c.category] = (acc[c.category] || 0) + c.credits
+      acc[c.category] = (acc[c.category] || 0) + semesterEquivalent(c)
       return acc
     }, {})
   }, [courses])
@@ -285,7 +291,8 @@ export default function App() {
               </label>
               <div className="two">
                 <label>Course code<input value={form.code} onChange={e => setForm({...form, code:e.target.value})} placeholder="ENG 101" /></label>
-                <label>Credits<input type="number" min="0.5" max="20" step="0.5" value={form.credits} onChange={e => setForm({...form, credits:e.target.value})} /></label>
+                <label>Credits<input type="number" min="0.5" max="30" step="0.25" value={form.credits} onChange={e => setForm({...form, credits:e.target.value})} /></label>
+                <label>Credit type<select value={form.creditSystem} onChange={e => setForm({...form, creditSystem:e.target.value as 'semester' | 'quarter'})}><option value="semester">Semester credits</option><option value="quarter">Quarter credits</option></select></label>
               </div>
               <label>Course title<input value={form.title} onChange={e => setForm({...form, title:e.target.value})} placeholder="English Composition I" /></label>
               <div className="two">
@@ -320,7 +327,7 @@ export default function App() {
 
             <div className="import">
               <h3>Or import a CSV</h3>
-              <p>Headers supported: institution, code, title, credits, grade, term.</p>
+              <p>Headers supported: institution, code, title, credits, credit_system (semester or quarter), grade, term.</p>
               <input type="file" accept=".csv,text/csv" onChange={onCsv} />
             </div>
             {message && <div className="message" role="status">{message}</div>}
@@ -339,7 +346,8 @@ export default function App() {
           <aside className="panel summary">
             <h2>Credit snapshot</h2>
             <div className="metric"><span>Total courses</span><strong>{courses.length}</strong></div>
-            <div className="metric"><span>Total credits entered</span><strong>{totalCredits}</strong></div>
+            <div className="metric"><span>Semester-equivalent credits</span><strong>{totalCredits.toFixed(2)}</strong></div>
+            {quarterCredits > 0 && <div className="metric small"><span>Quarter credits entered</span><strong>{quarterCredits.toFixed(2)} → {(quarterCredits * 2 / 3).toFixed(2)} semester</strong></div>}
             <hr />
             <h3>By category</h3>
             {categories.filter(c => categoryTotals[c]).map(c => (
@@ -360,7 +368,7 @@ export default function App() {
           </div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Institution</th><th>Course</th><th>Title</th><th>Credits</th><th>Grade</th><th>Category</th><th></th></tr></thead>
+              <thead><tr><th>Institution</th><th>Course</th><th>Title</th><th>Credits</th><th>Credit type</th><th>Semester equiv.</th><th>Grade</th><th>Category</th><th></th></tr></thead>
               <tbody>
                 {courses.map(course => (
                   <tr key={course.id}>
@@ -368,6 +376,8 @@ export default function App() {
                     <td>{course.code}</td>
                     <td>{course.title}</td>
                     <td>{course.credits}</td>
+                    <td><select value={course.creditSystem || 'semester'} onChange={e => save(courses.map(c => c.id === course.id ? {...c, creditSystem:e.target.value as 'semester' | 'quarter'} : c))}><option value="semester">Semester</option><option value="quarter">Quarter</option></select></td>
+                    <td>{semesterEquivalent(course).toFixed(2)}</td>
                     <td>{course.grade || '—'}</td>
                     <td>
                       <select value={course.category} onChange={e => save(courses.map(c => c.id === course.id ? {...c, category:e.target.value} : c))}>
@@ -377,7 +387,7 @@ export default function App() {
                     <td><button className="link" onClick={() => save(courses.filter(c => c.id !== course.id))}>Remove</button></td>
                   </tr>
                 ))}
-                {!courses.length && <tr><td colSpan={7} className="empty">No coursework added yet.</td></tr>}
+                {!courses.length && <tr><td colSpan={9} className="empty">No coursework added yet.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -391,7 +401,7 @@ export default function App() {
             course age limits, and institutional policy must be verified with the receiving school.
           </p>
           <div className="opportunity-grid">
-            <div><strong>{Math.min(totalCredits, 90)}</strong><span>Credits to review for possible transfer</span></div>
+            <div><strong>{Math.min(totalCredits, 90).toFixed(2)}</strong><span>Credits to review for possible transfer</span></div>
             <div><strong>{Object.keys(categoryTotals).length}</strong><span>Academic categories represented</span></div>
             <div><strong>{courses.length ? 'Ready' : 'Not ready'}</strong><span>For a preliminary degree-path comparison</span></div>
           </div>
