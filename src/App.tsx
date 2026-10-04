@@ -1,4 +1,5 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
+import { getCoreHealth, searchInstitutions, type Institution } from './educationDataCore'
 import Papa from 'papaparse'
 import { z } from 'zod'
 
@@ -57,6 +58,21 @@ export default function App() {
   })
   const [form, setForm] = useState(starter)
   const [message, setMessage] = useState('')
+  const [coreOnline, setCoreOnline] = useState(false)
+  const [institutionMatches, setInstitutionMatches] = useState<Institution[]>([])
+
+  useEffect(() => {
+    getCoreHealth().then(result => setCoreOnline(result.ok)).catch(() => setCoreOnline(false))
+  }, [])
+
+  useEffect(() => {
+    const query = form.institution.trim()
+    if (query.length < 3) { setInstitutionMatches([]); return }
+    const timer = window.setTimeout(() => {
+      searchInstitutions(query).then(setInstitutionMatches).catch(() => setInstitutionMatches([]))
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [form.institution])
 
   const save = (next: Course[]) => {
     setCourses(next)
@@ -175,7 +191,7 @@ export default function App() {
           Your coursework stays in this browser.
         </p>
         <div className="badges">
-          <span>Local-first</span><span>No account</span><span>No transcript upload required</span>
+          <span>Local-first</span><span>No account</span><span>No transcript upload required</span><span>{coreOnline ? 'Education Data Core connected' : 'Reference data offline'}</span>
         </div>
       </header>
 
@@ -183,7 +199,7 @@ export default function App() {
         <section className="panel privacy">
           <div>
             <h2>Privacy-first by design</h2>
-            <p>TranscriptLite stores your entries locally in your browser. This MVP does not send coursework to a server.</p>
+            <p>TranscriptLite stores your entries locally in your browser. Coursework is not sent to the Education Data Core. Only public reference-data searches, such as institution names, are requested from the Core.</p>
           </div>
           <strong>Preliminary planning only — not an official transfer evaluation.</strong>
         </section>
@@ -192,7 +208,11 @@ export default function App() {
           <div className="panel">
             <h2>Add coursework</h2>
             <form onSubmit={addCourse} className="course-form">
-              <label>Institution<input value={form.institution} onChange={e => setForm({...form, institution:e.target.value})} placeholder="Example University" /></label>
+              <label>Institution<input value={form.institution} onChange={e => setForm({...form, institution:e.target.value})} placeholder="Example University" />
+                {institutionMatches.length > 0 && <div className="reference-matches" aria-label="Institution reference matches">
+                  {institutionMatches.map(item => <button type="button" key={item.id} onClick={() => { setForm({...form, institution:item.official_name}); setInstitutionMatches([]) }}>{item.official_name}</button>)}
+                </div>}
+              </label>
               <div className="two">
                 <label>Course code<input value={form.code} onChange={e => setForm({...form, code:e.target.value})} placeholder="ENG 101" /></label>
                 <label>Credits<input type="number" min="0.5" max="20" step="0.5" value={form.credits} onChange={e => setForm({...form, credits:e.target.value})} /></label>
