@@ -37,7 +37,25 @@ function pageLines(items: PdfTextItem[]) {
     .filter(Boolean)
 }
 
-function parseCourses(lines: string[]): ParsedPdfCourse[] {
+function detectInstitutions(lines: string[]) {
+  const names = new Set<string>()
+  for (const line of lines) {
+    const cleaned = line.replace(/\s*\(fictional\)\s*/ig, '').trim()
+    if (/\b(university|college|institute|school)\b/i.test(cleaned) && cleaned.length < 100 &&
+        !/student|course|transcript|record|transfer work|academic/i.test(cleaned)) names.add(cleaned)
+  }
+  return [...names]
+}
+
+function institutionForLine(lines: string[], index: number, institutions: string[]) {
+  for (let i = index; i >= Math.max(0, index - 20); i -= 1) {
+    const hit = institutions.find(name => lines[i].toLowerCase().includes(name.toLowerCase()))
+    if (hit) return hit
+  }
+  return institutions[0] || ''
+}
+
+function parseCourses(lines: string[], institutions: string[]): ParsedPdfCourse[] {
   const courses: ParsedPdfCourse[] = []
   for (let i = 0; i < lines.length; i += 1) {
     const start = lines[i].match(codePattern)
@@ -64,7 +82,7 @@ function parseCourses(lines: string[]): ParsedPdfCourse[] {
     }
     if (!title || title.length < 2) continue
 
-    courses.push({ institution: '', code, title, credits, grade, term: '' })
+    courses.push({ institution: institutionForLine(lines, i, institutions), code, title, credits, grade, term: '' })
   }
 
   const seen = new Set<string>()
@@ -76,7 +94,7 @@ function parseCourses(lines: string[]): ParsedPdfCourse[] {
   })
 }
 
-export async function extractTranscriptPdf(file: File): Promise<{ text: string; courses: ParsedPdfCourse[] }> {
+export async function extractTranscriptPdf(file: File): Promise<{ text: string; courses: ParsedPdfCourse[]; institutions: string[] }> {
   const bytes = new Uint8Array(await file.arrayBuffer())
   const pdf = await getDocument({ data: bytes }).promise
   const lines: string[] = []
@@ -91,5 +109,6 @@ export async function extractTranscriptPdf(file: File): Promise<{ text: string; 
   }
 
   const text = lines.join('\n')
-  return { text, courses: parseCourses(lines) }
+  const institutions = detectInstitutions(lines)
+  return { text, courses: parseCourses(lines, institutions), institutions }
 }
