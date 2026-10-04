@@ -14,6 +14,7 @@ type Course = {
   grade: string
   term: string
   category: string
+  classificationConfidence?: 'high' | 'medium' | 'low'
 }
 
 const courseSchema = z.object({
@@ -36,16 +37,40 @@ const starter = {
   term: '',
 }
 
-const categories = ['General Education', 'Business', 'Technology', 'Healthcare', 'Criminal Justice', 'Elective', 'Other']
+const categories = [
+  'Gen Ed — Written Communication', 'Gen Ed — Oral Communication', 'Gen Ed — Quantitative Reasoning',
+  'Gen Ed — Natural Science', 'Gen Ed — Social & Behavioral Science', 'Gen Ed — Humanities',
+  'Gen Ed — Arts', 'Gen Ed — History/Civics', 'Gen Ed — Diversity/Global', 'Gen Ed — Information/Digital Literacy',
+  'Business', 'Cybersecurity', 'Computer Science', 'Data Science', 'Technology', 'Healthcare', 'Criminal Justice', 'Elective', 'Other'
+]
+const degreeOptions = ['Business', 'Cybersecurity', 'Computer Science', 'Data Science', 'Healthcare Management', 'Criminal Justice', 'Information Technology', 'Still deciding']
 
 function categorize(title: string, code: string) {
   const value = (title + ' ' + code).toLowerCase()
-  if (/english|writing|composition|math|algebra|statistics|history|psych|sociology|biology|science|humanit/.test(value)) return 'General Education'
-  if (/business|account|finance|management|marketing|econom|organiz/.test(value)) return 'Business'
-  if (/computer|information|cyber|network|program|software|database|technology/.test(value)) return 'Technology'
-  if (/health|nurs|anatomy|physiology|medical|clinical/.test(value)) return 'Healthcare'
-  if (/criminal|justice|crimin|law|police|correction/.test(value)) return 'Criminal Justice'
+  if (/composition|college writing|academic writing|english composition|rhetoric/.test(value)) return 'Gen Ed — Written Communication'
+  if (/public speaking|oral communication|speech|interpersonal communication/.test(value)) return 'Gen Ed — Oral Communication'
+  if (/statistics|algebra|calculus|quantitative|mathematics|finite math|college math|logic/.test(value)) return 'Gen Ed — Quantitative Reasoning'
+  if (/biology|chemistry|physics|astronomy|geology|environmental science|anatomy|physiology|earth science/.test(value)) return 'Gen Ed — Natural Science'
+  if (/psychology|sociology|anthropology|political science|economics|human geography|social science/.test(value)) return 'Gen Ed — Social & Behavioral Science'
+  if (/philosophy|ethics|literature|humanities|religion|world civilization/.test(value)) return 'Gen Ed — Humanities'
+  if (/art history|fine art|music|theatre|theater|dance|visual art/.test(value)) return 'Gen Ed — Arts'
+  if (/u\.?s\.? history|american history|world history|government|civics|constitution/.test(value)) return 'Gen Ed — History/Civics'
+  if (/diversity|global|culture|cultural|race|ethnic|gender studies|international/.test(value)) return 'Gen Ed — Diversity/Global'
+  if (/information literacy|digital literacy|computer literacy|intro.*comput/.test(value)) return 'Gen Ed — Information/Digital Literacy'
+  if (/cyber|information security|network security|ethical hack|digital forensics|security operations/.test(value)) return 'Cybersecurity'
+  if (/computer science|programming|algorithm|data structure|software engineering|operating system/.test(value)) return 'Computer Science'
+  if (/data science|machine learning|data analytics|data mining|big data|artificial intelligence/.test(value)) return 'Data Science'
+  if (/business|account|finance|management|marketing|organiz/.test(value)) return 'Business'
+  if (/computer|information technology|network|database|technology/.test(value)) return 'Technology'
+  if (/health|nurs|medical|clinical/.test(value)) return 'Healthcare'
+  if (/criminal|justice|crimin|law enforcement|police|correction/.test(value)) return 'Criminal Justice'
   return 'Elective'
+}
+
+function classificationConfidence(title: string, code: string, category: string) {
+  const value = (title + ' ' + code).trim()
+  if (category === 'Elective' || category === 'Other') return 'low' as const
+  return value.split(/\s+/).length >= 3 ? 'high' as const : 'medium' as const
 }
 
 function uid() {
@@ -70,6 +95,7 @@ export default function App() {
   const [destinationQuery, setDestinationQuery] = useState('')
   const [destinationMatches, setDestinationMatches] = useState<Institution[]>([])
   const [destinationSchool, setDestinationSchool] = useState<Institution | null>(null)
+  const [degreeGoal, setDegreeGoal] = useState('Still deciding')
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfFileName, setPdfFileName] = useState('')
   const [showNextSteps, setShowNextSteps] = useState(false)
@@ -121,6 +147,7 @@ export default function App() {
       id: uid(),
       ...parsed.data,
       category: categorize(parsed.data.title, parsed.data.code),
+      classificationConfidence: classificationConfidence(parsed.data.title, parsed.data.code, categorize(parsed.data.title, parsed.data.code)),
     }
     save([...courses, next])
     setForm(starter)
@@ -165,7 +192,7 @@ export default function App() {
     const merged = [...courses]
     let added = 0
     for (const item of pdfCourses) {
-      const course: Course = { id: uid(), ...item, creditSystem: 'semester', institution: item.institution || pdfInstitution.trim() || 'Institution needs review', category: categorize(item.title, item.code) }
+      const course: Course = { id: uid(), ...item, creditSystem: 'semester', institution: item.institution || pdfInstitution.trim() || 'Institution needs review', category: categorize(item.title, item.code), classificationConfidence: classificationConfidence(item.title, item.code, categorize(item.title, item.code)) }
       const duplicate = merged.some(c => c.institution.toLowerCase() === course.institution.toLowerCase() && c.code.toLowerCase() === course.code.toLowerCase())
       if (!duplicate) { merged.push(course); added += 1 }
     }
@@ -206,6 +233,7 @@ export default function App() {
             id: uid(),
             ...parsed.data,
             category: categorize(parsed.data.title, parsed.data.code),
+            classificationConfidence: classificationConfidence(parsed.data.title, parsed.data.code, categorize(parsed.data.title, parsed.data.code)),
           })
         }
         const merged = [...courses]
@@ -380,7 +408,7 @@ export default function App() {
           </div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Institution</th><th>Course</th><th>Title</th><th>Credits</th><th>Credit type</th><th>Semester equiv.</th><th>Grade</th><th>Category</th><th></th></tr></thead>
+              <thead><tr><th>Institution</th><th>Course</th><th>Title</th><th>Credits</th><th>Credit type</th><th>Semester equiv.</th><th>Grade</th><th>Best-guess classification</th><th></th></tr></thead>
               <tbody>
                 {courses.map(course => (
                   <tr key={course.id}>
@@ -394,7 +422,7 @@ export default function App() {
                     <td>
                       <select value={course.category} onChange={e => save(courses.map(c => c.id === course.id ? {...c, category:e.target.value} : c))}>
                         {categories.map(cat => <option key={cat}>{cat}</option>)}
-                      </select>
+                      </select><small className="muted">{course.classificationConfidence || 'medium'} confidence · editable</small>
                     </td>
                     <td><button className="link" onClick={() => save(courses.filter(c => c.id !== course.id))}>Remove</button></td>
                   </tr>
@@ -403,6 +431,12 @@ export default function App() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="panel">
+          <h2>What degree are you working toward?</h2>
+          <p>This helps TranscriptLite organize likely major coursework separately from general education. It is a planning guess, not a receiving-school determination.</p>
+          <label>Degree area<select value={degreeGoal} onChange={e => setDegreeGoal(e.target.value)}>{degreeOptions.map(option => <option key={option}>{option}</option>)}</select></label>
         </section>
 
         <section className="panel" id="destination-school">
@@ -422,7 +456,7 @@ export default function App() {
           </p>
           <div className="opportunity-grid">
             <div><strong>{Math.min(totalCredits, 90).toFixed(2)}</strong><span>Credits to review for possible transfer</span></div>
-            <div><strong>{Object.keys(categoryTotals).length}</strong><span>Academic categories represented</span></div>
+            <div><strong>{Object.keys(categoryTotals).length}</strong><span>Academic categories represented · Goal: {degreeGoal}</span></div>
             <div><strong>{courses.length && destinationSchool ? 'Ready' : 'Needs destination'}</strong><span>{destinationSchool ? `Receiving school: ${destinationSchool.official_name}` : 'Choose where you want to transfer'}</span></div>
           </div>
         </section>
