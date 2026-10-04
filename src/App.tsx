@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react'
 import { getCoreHealth, searchInstitutions, type Institution } from './educationDataCore'
+import { extractTranscriptPdf, type ParsedPdfCourse } from './transcriptPdf'
 import Papa from 'papaparse'
 import { z } from 'zod'
 
@@ -60,6 +61,9 @@ export default function App() {
   const [message, setMessage] = useState('')
   const [coreOnline, setCoreOnline] = useState(false)
   const [institutionMatches, setInstitutionMatches] = useState<Institution[]>([])
+  const [pdfCourses, setPdfCourses] = useState<ParsedPdfCourse[]>([])
+  const [pdfInstitution, setPdfInstitution] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   useEffect(() => {
     getCoreHealth().then(result => setCoreOnline(result.ok)).catch(() => setCoreOnline(false))
@@ -104,6 +108,48 @@ export default function App() {
     save([...courses, next])
     setForm(starter)
     setMessage('Course added.')
+  }
+
+  const onPdf = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (file.type !== 'application/pdf' || file.size > 15_000_000) {
+      setMessage('Please choose a PDF transcript under 15 MB.')
+      event.target.value = ''
+      return
+    }
+    setPdfBusy(true)
+    setPdfCourses([])
+    try {
+      const result = await extractTranscriptPdf(file)
+      setPdfCourses(result.courses)
+      setMessage(result.courses.length
+        ? `Found ${result.courses.length} possible course${result.courses.length === 1 ? '' : 's'}. Review before adding.`
+        : 'PDF text was read locally, but no courses were confidently identified. Scanned/image-only PDFs are not yet supported.')
+    } catch {
+      setMessage('Could not read that PDF locally. The file was not uploaded.')
+    } finally {
+      setPdfBusy(false)
+      event.target.value = ''
+    }
+  }
+
+  const addPdfCourses = () => {
+    if (!pdfInstitution.trim()) {
+      setMessage('Enter the institution shown on the transcript before adding extracted courses.')
+      return
+    }
+    const merged = [...courses]
+    let added = 0
+    for (const item of pdfCourses) {
+      const course: Course = { id: uid(), ...item, institution: pdfInstitution.trim(), category: categorize(item.title, item.code) }
+      const duplicate = merged.some(c => c.institution.toLowerCase() === course.institution.toLowerCase() && c.code.toLowerCase() === course.code.toLowerCase())
+      if (!duplicate) { merged.push(course); added += 1 }
+    }
+    save(merged)
+    setPdfCourses([])
+    setPdfInstitution('')
+    setMessage(`Added ${added} reviewed course${added === 1 ? '' : 's'} from the locally processed PDF.`)
   }
 
   const onCsv = (event: ChangeEvent<HTMLInputElement>) => {
@@ -199,7 +245,7 @@ export default function App() {
         <section className="panel privacy">
           <div>
             <h2>Privacy-first by design</h2>
-            <p>TranscriptLite stores your entries locally in your browser. Coursework is not sent to the Education Data Core. Only public reference-data searches, such as institution names, are requested from the Core.</p>
+            <p>TranscriptLite stores your entries locally in your browser. Coursework is not sent to the Education Data Core. PDFs and coursework are processed and stored on this device. Only public reference-data searches, such as institution names, are requested from the Core.</p>
           </div>
           <strong>Preliminary planning only — not an official transfer evaluation.</strong>
         </section>
@@ -224,6 +270,19 @@ export default function App() {
               </div>
               <button className="primary" type="submit">Add course</button>
             </form>
+
+            <div className="import">
+              <h3>Or read a transcript PDF on this device</h3>
+              <p>The PDF is processed in your browser and is never uploaded. Text-based PDFs work best; image-only scans are not yet supported.</p>
+              <input type="file" accept="application/pdf,.pdf" onChange={onPdf} disabled={pdfBusy} />
+              {pdfBusy && <p className="muted">Reading PDF locally…</p>}
+              {pdfCourses.length > 0 && <div className="pdf-review">
+                <label>Transcript institution<input value={pdfInstitution} onChange={e => setPdfInstitution(e.target.value)} placeholder="Institution shown on transcript" /></label>
+                <strong>{pdfCourses.length} possible courses found</strong>
+                <div className="pdf-course-list">{pdfCourses.map((course, index) => <div key={index}><span>{course.code} · {course.title}</span><span>{course.credits} cr · {course.grade}</span></div>)}</div>
+                <button type="button" className="primary" onClick={addPdfCourses}>Add reviewed courses</button>
+              </div>}
+            </div>
 
             <div className="import">
               <h3>Or import a CSV</h3>

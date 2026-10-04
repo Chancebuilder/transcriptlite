@@ -21,3 +21,27 @@
 .reference-matches button:focus-visible {
   background: #f3f5f8;
 }
+
+
+.pdf-review {
+  display: grid;
+  gap: .75rem;
+  margin-top: .75rem;
+  padding: .85rem;
+  border: 1px solid #d9dee7;
+  border-radius: .65rem;
+}
+.pdf-course-list {
+  display: grid;
+  gap: .4rem;
+  max-height: 14rem;
+  overflow: auto;
+}
+.pdf-course-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .45rem 0;
+  border-bottom: 1px solid #eceff3;
+  font-size: .9rem;
+}
