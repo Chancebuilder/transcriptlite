@@ -1,4 +1,4 @@
-import { getDocument, GlobalWorkerOptions, type TextItem } from 'pdfjs-dist'
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 GlobalWorkerOptions.workerSrc = workerUrl
@@ -14,7 +14,9 @@ export type ParsedPdfCourse = {
 
 const courseLine = /^([A-Z]{2,8})\s*[- ]?\s*(\d{2,4}[A-Z]?)\s+(.+?)\s+(\d+(?:\.\d+)?)\s+([A-F][+-]?|P|PASS|CR|S|U|W|WF)$/i
 
-function pageLines(items: TextItem[]) {
+type PdfTextItem = { str: string; transform: number[]; hasEOL?: boolean }
+
+function pageLines(items: PdfTextItem[]) {
   const lines: string[] = []
   let current: string[] = []
   let lastY: number | null = null
@@ -44,7 +46,7 @@ export async function extractTranscriptPdf(file: File): Promise<{ text: string; 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber)
     const content = await page.getTextContent()
-    lines.push(...pageLines(content.items.filter((item): item is TextItem => 'str' in item)))
+    lines.push(...pageLines(content.items.filter((item): item is PdfTextItem => 'str' in item)))
   }
 
   const text = lines.join('\n')
