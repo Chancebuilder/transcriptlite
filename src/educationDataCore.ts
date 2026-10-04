@@ -32,3 +32,21 @@ export async function searchProviders(query: string) {
   const result = await coreGet<Envelope<Provider[]>>(`/providers?q=${encodeURIComponent(query)}&limit=8`)
   return result.data
 }
+
+
+export type EvaluatedProgram = {
+  id: string
+  program_version_id?: string | null
+  official_program_family_name?: string | null
+  official_program_name?: string | null
+  degree_type?: string | null
+  academic_catalog_year?: string | null
+  verification_status?: string | null
+}
+
+export async function getEvaluatedPrograms(institutionId: string) {
+  const result = await coreGet<Envelope<EvaluatedProgram[]>>(
+    '/institutions/' + encodeURIComponent(institutionId) + '/programs'
+  )
+  return result.data
+}
