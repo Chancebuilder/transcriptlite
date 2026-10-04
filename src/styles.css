@@ -45,3 +45,8 @@
   border-bottom: 1px solid #eceff3;
   font-size: .9rem;
 }
+
+.powered-by { font-size: .8em; font-weight: 600; opacity: .78; }
+.legal-links { display: flex; flex-wrap: wrap; gap: .65rem 1rem; margin: .75rem 0; }
+.legal-links a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+footer p { max-width: 980px; line-height: 1.55; }

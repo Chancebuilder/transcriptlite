@@ -314,7 +314,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="hero">
-        <div className="brand">TranscriptLite</div>
+        <div className="brand">TranscriptLite <span className="powered-by">· Powered by The Degree Agency</span></div>
         <h1>Turn prior coursework into a clear starting point.</h1>
         <p>
           Enter or import completed courses, review your credit picture, and identify preliminary transfer opportunities.
@@ -491,7 +491,17 @@ export default function App() {
       </main>
 
       <footer>
-        <strong>TranscriptLite</strong> by The Degree Agency · Planning support only. Not a college, registrar, accreditor, or official transcript evaluator.
+        <strong>TranscriptLite</strong> · Powered by The Degree Agency
+        <p>Preliminary educational planning support only. The Degree Agency is not a college, university, registrar, accreditor, or official transcript evaluator. Results, classifications, transfer possibilities, and degree-applicability recommendations are informational and are not guarantees of admission, transfer acceptance, equivalency, graduation, or degree completion. Receiving institutions make final determinations.</p>
+        <nav className="legal-links" aria-label="Legal and policy disclosures">
+          <a href="https://natashaontrust.com/privacy.html" target="_blank" rel="noreferrer">Privacy</a>
+          <a href="https://natashaontrust.com/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>
+          <a href="https://natashaontrust.com/cookies.html" target="_blank" rel="noreferrer">Cookie Policy</a>
+          <a href="https://natashaontrust.com/disclaimer.html" target="_blank" rel="noreferrer">Disclaimer</a>
+          <a href="https://natashaontrust.com/accessibility.html" target="_blank" rel="noreferrer">Accessibility</a>
+          <a href="https://natashaontrust.com/security.html" target="_blank" rel="noreferrer">Security</a>
+        </nav>
+        <p className="muted">Transcript PDFs and entered coursework are processed locally in your browser in the current TranscriptLite configuration. Public institution and program reference searches may be sent to the Education Data Core. Browser local storage is used to retain coursework on this device.</p>
       </footer>
     </div>
   )
