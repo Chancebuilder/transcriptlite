@@ -65,6 +65,7 @@ export default function App() {
   const [pdfInstitution, setPdfInstitution] = useState('')
   const [pdfBusy, setPdfBusy] = useState(false)
   const [pdfFileName, setPdfFileName] = useState('')
+  const [showNextSteps, setShowNextSteps] = useState(false)
   const pdfInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -162,6 +163,7 @@ export default function App() {
     setPdfCourses([])
     setPdfInstitution('')
     setMessage(`Added ${added} reviewed course${added === 1 ? '' : 's'} from the locally processed PDF.`)
+    setShowNextSteps(true)
   }
 
   const onCsv = (event: ChangeEvent<HTMLInputElement>) => {
@@ -214,6 +216,16 @@ export default function App() {
     })
   }
 
+  const generateReport = () => {
+    setShowNextSteps(false)
+    document.getElementById('report')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const addMoreManually = () => {
+    setShowNextSteps(false)
+    document.getElementById('manual-course-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   const totalCredits = useMemo(() => courses.reduce((sum, c) => sum + c.credits, 0), [courses])
   const categoryTotals = useMemo(() => {
     return courses.reduce<Record<string, number>>((acc, c) => {
@@ -263,7 +275,7 @@ export default function App() {
         </section>
 
         <section className="grid">
-          <div className="panel">
+          <div className="panel" id="manual-course-form">
             <h2>Add coursework</h2>
             <form onSubmit={addCourse} className="course-form">
               <label>Institution<input value={form.institution} onChange={e => setForm({...form, institution:e.target.value})} placeholder="Example University" />
@@ -312,6 +324,16 @@ export default function App() {
               <input type="file" accept=".csv,text/csv" onChange={onCsv} />
             </div>
             {message && <div className="message" role="status">{message}</div>}
+            {showNextSteps && (
+              <div className="next-steps" role="region" aria-label="Next steps">
+                <h3>What would you like to do next?</h3>
+                <p>Your PDF courses have been added. Generate your preliminary report now, or add more coursework first.</p>
+                <div className="actions">
+                  <button type="button" className="primary" onClick={generateReport}>Generate report</button>
+                  <button type="button" onClick={addMoreManually}>Add additional courses manually</button>
+                </div>
+              </div>
+            )}
           </div>
 
           <aside className="panel summary">
@@ -361,8 +383,8 @@ export default function App() {
           </div>
         </section>
 
-        <section className="panel opportunities">
-          <h2>Preliminary transfer opportunities</h2>
+        <section className="panel opportunities" id="report">
+          <h2>Preliminary TranscriptLite report</h2>
           <p>
             TranscriptLite helps you organize potentially transferable credit and prepare for comparison against transfer-friendly
             institutions. Actual transferability, equivalency, degree applicability, residency requirements, grade minimums,
